@@ -1,91 +1,48 @@
-// app/api/chat/route.js
-import { NextResponse } from 'next/server';
+const express = require('express');
+const fetch = require('node-fetch');
+const app = express();
+const PORT = process.env.PORT || 3000;
 
-// La chiave API di DeepSeek verrà presa dalle variabili d'ambiente
-const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
+app.use(express.json());
 
-// Questa funzione gestisce le richieste POST all'URL /api/chat
-export async function POST(request) {
+// La tua API per il bot scout
+app.post('/api/chat', async (req, res) => {
   try {
-    console.log("📍 Ricevuta richiesta all'endpoint /api/chat");
+    const { prompt } = req.body;
     
-    // 1. Legge il corpo della richiesta (JSON) che contiene il "prompt"
-    const { prompt, userId } = await request.json();
-    console.log("📥 Prompt ricevuto:", prompt.substring(0, 100) + "..."); // Logga solo i primi 100 caratteri
-
-    // 2. Controlla che il prompt sia stato fornito
     if (!prompt) {
-      console.error("❌ Errore: Nessun prompt fornito");
-      return NextResponse.json(
-        { success: false, error: "Devi fornire un prompt per la richiesta." },
-        { status: 400 } // Status code 400 = Bad Request
-      );
+      return res.status(400).json({ error: "Nessun prompt fornito" });
     }
 
-    // 3. Controlla che la API key sia configurata
-    if (!DEEPSEEK_API_KEY) {
-      console.error("❌ Errore: API Key di DeepSeek non configurata");
-      return NextResponse.json(
-        { success: false, error: "Configurazione del server incompleta." },
-        { status: 500 } // Status code 500 = Internal Server Error
-      );
-    }
-
-    // 4. Prepara la richiesta a DeepSeek
-    console.log("🔗 Invio richiesta a DeepSeek...");
+    // Chiamata a DeepSeek
     const deepseekResponse = await fetch('https://api.deepseek.com/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
+        'Authorization': `Bearer ${process.env.DEEPSEEK_API_KEY}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
         model: 'deepseek-chat',
-        messages: [
-          { 
-            role: 'user', 
-            content: prompt // Il testo completo della tua domanda
-          }
-        ],
-        temperature: 0.1, // Bassa temperatura = risposte più focalizzate e meno creative
-        max_tokens: 1000   // Lunghezza massima della risposta
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.1,
+        max_tokens: 1000
       })
     });
 
-    // 5. Controlla se la risposta di DeepSeek è ok
-    if (!deepseekResponse.ok) {
-      const errorText = await deepseekResponse.text();
-      console.error("❌ Errore nella risposta di DeepSeek:", deepseekResponse.status, errorText);
-      throw new Error(`Errore DeepSeek: ${deepseekResponse.status} ${deepseekResponse.statusText}`);
-    }
-
-    // 6. Estrae il testo della risposta dal JSON
     const data = await deepseekResponse.json();
-    const botAnswer = data.choices[0].message.content;
-    console.log("✅ Risposta ricevuta da DeepSeek:", botAnswer.substring(0, 100) + "...");
-
-    // 7. Restituisce la risposta al frontend (il tuo bot)
-    return NextResponse.json({ 
-      success: true, 
-      response: botAnswer 
-    });
+    res.json({ response: data.choices[0].message.content });
 
   } catch (error) {
-    // 8. Gestisce qualsiasi errore imprevisto
-    console.error('❌ Errore in /api/chat:', error.message);
-    
-    return NextResponse.json(
-      { 
-        success: false, 
-        error: "Il vecchio saggio scout è momentaneamente assorto nei suoi ricordi... Prova a ripetere la domanda!",
-        details: process.env.NODE_ENV === 'development' ? error.message : undefined
-      },
-      { status: 500 } // Status code 500 = Internal Server Error
-    );
+    console.error('Errore:', error);
+    res.status(500).json({ error: "Il vecchio saggio è momentaneamente assorto..." });
   }
-}
+});
 
-// Spiegazione degli status HTTP:
-// 200 = Success (Tutto ok)
-// 400 = Bad Request (Dati inviati sbagliati)
-// 500 = Internal Server Error (Errore nel server)
+// Pagina di benvenuto
+app.get('/', (req, res) => {
+  res.json({ message: "Server API Scout Bot è online! 🏕️" });
+});
+
+app.listen(PORT, () => {
+  console.log(`Server scout running on port ${PORT}`);
+});
